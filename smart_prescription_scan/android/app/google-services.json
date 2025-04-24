@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "342682518669",
+    "project_id": "smartprescriptionscan-8684f",
+    "storage_bucket": "smartprescriptionscan-8684f.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:342682518669:android:df1a4707dff1f551b68ec4",
+        "android_client_info": {
+          "package_name": "com.example.smart_prescription_scan"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBkzQalJ5GXxWGKPE09-wlZYgLhTJYdIYM"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+} 
