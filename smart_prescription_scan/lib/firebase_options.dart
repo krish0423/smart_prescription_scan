@@ -22,12 +22,12 @@ class DefaultFirebaseOptions {
   }
 
   static const FirebaseOptions web = FirebaseOptions(
-    apiKey: 'AIzaSyBkzQalJ5GXxWGKPE09-wlZYgLhTJYdIYM',
-    appId: '1:342682518669:web:df1a4707dff1f551b68ec4',
-    messagingSenderId: '342682518669',
-    projectId: 'smartprescriptionscan-8684f',
-    authDomain: 'smartprescriptionscan-8684f.firebaseapp.com',
-    storageBucket: 'smartprescriptionscan-8684f.firebasestorage.app',
-    measurementId: 'G-2TSBQ836RH',
+    apiKey: 'YOUR API KEY',
+    appId: 'YOUR APP ID',
+    messagingSenderId: 'YOURS',
+    projectId: 'YOURS',
+    authDomain: 'YOURS',
+    storageBucket: 'YOURS',
+    measurementId: 'YOURS',
   );
 } 
