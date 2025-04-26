@@ -2,6 +2,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart' show kIsWeb, debugPrint;
+import 'dart:async' show TimeoutException;
 import '../models/user_model.dart';
 
 class AuthResult {
@@ -37,7 +38,28 @@ class AuthService {
       );
       
       debugPrint('Firestore initialized with persistence for web');
+      
+      // Add explicit connection state handling
+      _initFirestoreNetworkHandling();
     }
+  }
+  
+  // Initialize Firestore network handling
+  void _initFirestoreNetworkHandling() {
+    // Check Firestore connectivity
+    _firestore.disableNetwork().then((_) {
+      debugPrint('Firestore network disabled temporarily for initialization');
+      // Re-enable network after a short delay
+      Future.delayed(const Duration(milliseconds: 500), () {
+        _firestore.enableNetwork().then((_) {
+          debugPrint('Firestore network re-enabled');
+        }).catchError((error) {
+          debugPrint('Failed to enable Firestore network: $error');
+        });
+      });
+    }).catchError((error) {
+      debugPrint('Failed to initialize Firestore network handling: $error');
+    });
   }
 
   // Get current Firebase user
@@ -52,7 +74,17 @@ class AuthService {
   // Helper method to safely access Firestore and handle connection errors
   Future<T> _safeFirestoreOperation<T>(Future<T> Function() operation, {T? defaultValue}) async {
     try {
-      return await operation();
+      // Add timeout to prevent operations from hanging indefinitely
+      return await operation().timeout(
+        const Duration(seconds: 10),
+        onTimeout: () {
+          debugPrint('Firestore operation timed out');
+          if (defaultValue != null) {
+            return defaultValue;
+          }
+          throw TimeoutException('Firestore operation timed out');
+        },
+      );
     } catch (e) {
       debugPrint('Firestore operation failed: ${e.toString()}');
       if (defaultValue != null) {
@@ -76,8 +108,8 @@ class AuthService {
       
       if (user != null) {
         // Create user document in Firestore
-        await _safeFirestoreOperation(() => 
-          _firestore.collection('users').doc(user.uid).set({
+        await _safeFirestoreOperation<void>(
+          () => _firestore.collection('users').doc(user.uid).set({
             'uid': user.uid,
             'email': email,
             'name': name,
@@ -128,12 +160,14 @@ class AuthService {
       
       if (user != null) {
         // Get user data from Firestore
-        DocumentSnapshot? userDoc;
+        DocumentSnapshot<Map<String, dynamic>>? userDoc;
         try {
-          userDoc = await _safeFirestoreOperation(
+          userDoc = await _safeFirestoreOperation<DocumentSnapshot<Map<String, dynamic>>?>(
             () => _firestore.collection('users').doc(user.uid).get(),
+            defaultValue: null,
           );
         } catch (e) {
+          debugPrint('Unable to get user data from Firestore: ${e.toString()}');
           // Continue with basic user data if Firestore is unreachable
           return AuthResult(
             success: true,
@@ -148,32 +182,27 @@ class AuthService {
         if (userDoc != null && userDoc.exists) {
           final userData = userDoc.data() as Map<String, dynamic>;
           
-          // Return user model
+          // Return user model with Firestore data
           return AuthResult(
             success: true,
             user: UserModel(
               uid: user.uid,
               email: user.email,
-              name: userData['name'] ?? '',
+              name: userData['name'] ?? user.displayName ?? '',
+              profilePicturePath: user.photoURL ?? '',
               isAuthenticated: true,
             )
           );
         }
         
-        // If user doc doesn't exist, create it
-        _safeFirestoreOperation(() => 
-          _firestore.collection('users').doc(user.uid).set({
-            'uid': user.uid,
-            'email': email,
-            'createdAt': FieldValue.serverTimestamp(),
-          })
-        );
-        
+        // If user doc doesn't exist or if Firestore is unreachable, create a basic user model
         return AuthResult(
           success: true,
           user: UserModel(
             uid: user.uid,
             email: user.email,
+            name: user.displayName ?? '',
+            profilePicturePath: user.photoURL ?? '',
             isAuthenticated: true,
           )
         );
@@ -224,12 +253,14 @@ class AuthService {
       
       if (user != null) {
         // Check if user exists in Firestore
-        DocumentSnapshot? userDoc;
+        DocumentSnapshot<Map<String, dynamic>>? userDoc;
         try {
-          userDoc = await _safeFirestoreOperation(
+          userDoc = await _safeFirestoreOperation<DocumentSnapshot<Map<String, dynamic>>?>(
             () => _firestore.collection('users').doc(user.uid).get(),
+            defaultValue: null,
           );
         } catch (e) {
+          debugPrint('Unable to get user data from Firestore during Google sign-in: ${e.toString()}');
           // If Firestore is unavailable, continue with basic authentication
           return AuthResult(
             success: true,
@@ -237,7 +268,7 @@ class AuthService {
               uid: user.uid,
               email: user.email,
               name: user.displayName ?? '',
-              profilePicturePath: user.photoURL,
+              profilePicturePath: user.photoURL ?? '',
               isAuthenticated: true,
             )
           );
@@ -245,12 +276,12 @@ class AuthService {
         
         if (userDoc == null || !userDoc.exists) {
           // Create user document if it doesn't exist
-          _safeFirestoreOperation(() => 
+          _safeFirestoreOperation<void>(() => 
             _firestore.collection('users').doc(user.uid).set({
               'uid': user.uid,
               'email': user.email,
               'name': user.displayName ?? '',
-              'photoURL': user.photoURL,
+              'photoURL': user.photoURL ?? '',
               'createdAt': FieldValue.serverTimestamp(),
             })
           );
@@ -263,7 +294,7 @@ class AuthService {
             uid: user.uid,
             email: user.email,
             name: user.displayName ?? '',
-            profilePicturePath: user.photoURL,
+            profilePicturePath: user.photoURL ?? '',
             isAuthenticated: true,
           )
         );

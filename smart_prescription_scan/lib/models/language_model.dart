@@ -67,6 +67,11 @@ class LanguageModel {
         name: 'Arabic',
         nativeName: 'العربية',
       ),
+      LanguageModel(
+        code: 'gu',
+        name: 'Gujarati',
+        nativeName: 'ગુજરાતી',
+      ),
     ];
   }
 

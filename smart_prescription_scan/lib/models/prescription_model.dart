@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'medicine_model.dart';
 
 class PrescriptionModel {
   final String id; // Unique identifier
@@ -7,6 +8,7 @@ class PrescriptionModel {
   final Map<String, String> translations; // Language code to translation mapping
   final DateTime dateScanned; // Date when prescription was scanned
   final bool isImportant; // Whether user marked it as important
+  final List<MedicineModel> medicines; // List of medicines in the prescription
 
   PrescriptionModel({
     required this.id,
@@ -15,6 +17,7 @@ class PrescriptionModel {
     required this.translations,
     required this.dateScanned,
     this.isImportant = false,
+    this.medicines = const [],
   });
 
   // Create a copy of this prescription model with updated fields
@@ -25,6 +28,7 @@ class PrescriptionModel {
     Map<String, String>? translations,
     DateTime? dateScanned,
     bool? isImportant,
+    List<MedicineModel>? medicines,
   }) {
     return PrescriptionModel(
       id: id ?? this.id,
@@ -33,6 +37,7 @@ class PrescriptionModel {
       translations: translations ?? this.translations,
       dateScanned: dateScanned ?? this.dateScanned,
       isImportant: isImportant ?? this.isImportant,
+      medicines: medicines ?? this.medicines,
     );
   }
 
@@ -45,6 +50,7 @@ class PrescriptionModel {
       'translations': translations,
       'dateScanned': dateScanned.millisecondsSinceEpoch,
       'isImportant': isImportant,
+      'medicines': medicines.map((med) => med.toJson()).toList(),
     };
   }
 
@@ -57,6 +63,13 @@ class PrescriptionModel {
       translations[key] = value.toString();
     });
     
+    List<MedicineModel> medicines = [];
+    if (json['medicines'] != null) {
+      medicines = (json['medicines'] as List)
+          .map((medJson) => MedicineModel.fromJson(medJson))
+          .toList();
+    }
+    
     return PrescriptionModel(
       id: json['id'],
       imagePath: json['imagePath'],
@@ -64,6 +77,7 @@ class PrescriptionModel {
       translations: translations,
       dateScanned: DateTime.fromMillisecondsSinceEpoch(json['dateScanned']),
       isImportant: json['isImportant'] ?? false,
+      medicines: medicines,
     );
   }
 

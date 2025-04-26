@@ -107,6 +107,13 @@ class _UploadScreenState extends State<UploadScreen> {
         throw Exception('No valid image selected');
       }
       
+      // Extract medicines from the summary
+      setState(() {
+        _processingStatus = 'Extracting medicines...';
+      });
+      
+      var medicines = await _geminiService.extractMedicinesFromSummary(summary);
+      
       // Create a new prescription model
       final String id = _storageService.generateUniqueId();
       final PrescriptionModel prescription = PrescriptionModel(
@@ -115,6 +122,7 @@ class _UploadScreenState extends State<UploadScreen> {
         summary: summary,
         translations: {'en': summary}, // Store original summary as English translation
         dateScanned: DateTime.now(),
+        medicines: medicines,
       );
       
       // Save the prescription to local storage
