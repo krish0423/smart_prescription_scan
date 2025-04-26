@@ -8,7 +8,7 @@ import 'package:google_generative_ai/google_generative_ai.dart';
 import '../models/medicine_model.dart';
 
 class GeminiService {
-  static const String _apiKey = 'AIzaSyBy3UPJiZ1-WUc_6u2bqSienwtFqGeXMbg';
+  static const String _apiKey = 'YOUR GEMINI KEY';
   late final GenerativeModel _model;
 
   GeminiService() {
