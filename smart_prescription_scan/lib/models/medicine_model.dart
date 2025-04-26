@@ -6,6 +6,9 @@ class MedicineModel {
   final String mechanism;
   final String sideEffects;
   final String risks;
+  final String dosage;
+  final String category;
+  final String interactions;
   final Map<String, Map<String, String>> translations; // Language code to field translations mapping
 
   MedicineModel({
@@ -14,6 +17,9 @@ class MedicineModel {
     required this.mechanism,
     required this.sideEffects,
     required this.risks,
+    this.dosage = '',
+    this.category = '',
+    this.interactions = '',
     this.translations = const {},
   });
 
@@ -24,6 +30,9 @@ class MedicineModel {
     String? mechanism,
     String? sideEffects,
     String? risks,
+    String? dosage,
+    String? category,
+    String? interactions,
     Map<String, Map<String, String>>? translations,
   }) {
     return MedicineModel(
@@ -32,6 +41,9 @@ class MedicineModel {
       mechanism: mechanism ?? this.mechanism,
       sideEffects: sideEffects ?? this.sideEffects,
       risks: risks ?? this.risks,
+      dosage: dosage ?? this.dosage,
+      category: category ?? this.category,
+      interactions: interactions ?? this.interactions,
       translations: translations ?? this.translations,
     );
   }
@@ -45,6 +57,9 @@ class MedicineModel {
         case 'mechanism': return mechanism;
         case 'sideEffects': return sideEffects;
         case 'risks': return risks;
+        case 'dosage': return dosage;
+        case 'category': return category;
+        case 'interactions': return interactions;
         default: return '';
       }
     }
@@ -61,6 +76,9 @@ class MedicineModel {
       case 'mechanism': return mechanism;
       case 'sideEffects': return sideEffects;
       case 'risks': return risks;
+      case 'dosage': return dosage;
+      case 'category': return category;
+      case 'interactions': return interactions;
       default: return '';
     }
   }
@@ -73,6 +91,9 @@ class MedicineModel {
       'mechanism': mechanism,
       'sideEffects': sideEffects,
       'risks': risks,
+      'dosage': dosage,
+      'category': category,
+      'interactions': interactions,
       'translations': translations,
     };
   }
@@ -94,6 +115,9 @@ class MedicineModel {
       mechanism: json['mechanism'] ?? '',
       sideEffects: json['sideEffects'] ?? '',
       risks: json['risks'] ?? '',
+      dosage: json['dosage'] ?? '',
+      category: json['category'] ?? '',
+      interactions: json['interactions'] ?? '',
       translations: translations,
     );
   }

@@ -26,10 +26,12 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
   final StorageService _storageService = StorageService();
   List<PrescriptionModel> _recentScans = [];
   int _currentIndex = 0;
+  bool _skipInitialAnimations = true; // Skip animations on first load
   
-  // Animation controller for page transitions
+  // Animation controller for page transitions and pulse effect
   late AnimationController _animationController;
   late Animation<double> _fadeAnimation;
+  late Animation<double> _pulseAnimation;
   
   @override
   void initState() {
@@ -39,7 +41,8 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
     // Initialize animations
     _animationController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 600),
+      duration: const Duration(milliseconds: 2000),
+      reverseDuration: const Duration(milliseconds: 1000),
     );
     
     _fadeAnimation = CurvedAnimation(
@@ -47,7 +50,36 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
       curve: Curves.easeIn,
     );
     
+    _pulseAnimation = Tween<double>(
+      begin: 1.0,
+      end: 1.1,
+    ).animate(
+      CurvedAnimation(
+        parent: _animationController,
+        curve: Curves.easeInOut,
+      ),
+    );
+    
+    // Set up pulse animation only (not entry animation)
     _animationController.forward();
+    
+    // Set repeat for pulse animation
+    _animationController.addStatusListener((status) {
+      if (status == AnimationStatus.completed) {
+        _animationController.reverse();
+      } else if (status == AnimationStatus.dismissed) {
+        _animationController.forward();
+      }
+    });
+    
+    // After initial load, enable animations for future interactions
+    Future.delayed(const Duration(milliseconds: 300), () {
+      if (mounted) {
+        setState(() {
+          _skipInitialAnimations = false;
+        });
+      }
+    });
   }
   
   @override
@@ -80,179 +112,201 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
     
     return Scaffold(
       backgroundColor: AppColors.background,
-      body: FadeTransition(
-        opacity: _fadeAnimation,
-        child: SafeArea(
-          child: CustomScrollView(
-            slivers: [
-              // App Bar
-              SliverAppBar(
-                floating: true,
-                pinned: false,
-                expandedHeight: 120,
-                backgroundColor: Colors.transparent,
-                elevation: 0,
-                flexibleSpace: FlexibleSpaceBar(
-                  background: Container(
-                    padding: const EdgeInsets.fromLTRB(
-                      AppDimensions.paddingL,
-                      AppDimensions.paddingM, 
-                      AppDimensions.paddingL, 
-                      0
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    userPreferences.name.isNotEmpty 
-                                        ? 'Hello, ${userPreferences.name}!' 
-                                        : AppStrings.welcome,
-                                    style: AppTextStyles.heading2,
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                  const SizedBox(height: 4),
-                                  Text(
-                                    'Manage your prescriptions easily',
-                                    style: TextStyle(
-                                      color: AppColors.textSecondary,
-                                      fontSize: 14,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                            GestureDetector(
-                              onTap: () {
-                                Navigator.push(
-                                  context,
-                                  MaterialPageRoute(builder: (context) => const ProfileScreen()),
-                                ).then((_) => _loadRecentScans());
-                              },
-                              child: Hero(
-                                tag: 'profile_avatar',
-                                child: Container(
-                                  width: 50,
-                                  height: 50,
-                                  decoration: BoxDecoration(
-                                    color: AppColors.primaryBlue.withOpacity(0.1),
-                                    shape: BoxShape.circle,
-                                    border: Border.all(
-                                      color: AppColors.primaryBlue,
-                                      width: 2,
-                                    ),
-                                  ),
-                                  child: userPreferences.profilePicturePath.isNotEmpty
-                                      ? ClipRRect(
-                                          borderRadius: BorderRadius.circular(25),
-                                          child: Image.file(
-                                            File(userPreferences.profilePicturePath),
-                                            fit: BoxFit.cover,
-                                          ),
-                                        )
-                                      : Icon(
-                                          Icons.person,
-                                          color: AppColors.primaryBlue,
-                                          size: 26,
-                                        ),
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
+      body: SafeArea(
+        child: CustomScrollView(
+          slivers: [
+            // App Bar
+            SliverAppBar(
+              floating: true,
+              pinned: false,
+              expandedHeight: 120,
+              backgroundColor: Colors.transparent,
+              elevation: 0,
+              flexibleSpace: FlexibleSpaceBar(
+                background: Container(
+                  padding: const EdgeInsets.fromLTRB(
+                    AppDimensions.paddingL,
+                    AppDimensions.paddingM, 
+                    AppDimensions.paddingL, 
+                    0
                   ),
-                ),
-              ),
-              
-              // Main content
-              SliverToBoxAdapter(
-                child: Padding(
-                  padding: const EdgeInsets.all(AppDimensions.paddingL),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // Quick access cards
-                      _buildQuickAccessGrid(),
-                      
-                      const SizedBox(height: AppDimensions.paddingL),
-                      
-                      // Recent scans section
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          const Text(
-                            AppStrings.recentScans,
-                            style: AppTextStyles.heading3,
-                          ),
-                          if (_recentScans.isNotEmpty)
-                            TextButton(
-                              onPressed: () {
-                                Navigator.push(
-                                  context,
-                                  MaterialPageRoute(builder: (context) => const HistoryScreen()),
-                                ).then((_) => _loadRecentScans());
-                              },
-                              child: Text(
-                                'View all',
-                                style: TextStyle(
-                                  color: AppColors.primaryBlue,
-                                  fontWeight: FontWeight.bold,
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  userPreferences.name.isNotEmpty 
+                                      ? 'Hello, ${userPreferences.name}!' 
+                                      : AppStrings.welcome,
+                                  style: AppTextStyles.heading2,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
                                 ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  'Manage your prescriptions easily',
+                                  style: TextStyle(
+                                    color: AppColors.textSecondary,
+                                    fontSize: 14,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          GestureDetector(
+                            onTap: () {
+                              Navigator.push(
+                                context,
+                                _createPageRouteBuilder((context) => const ProfileScreen()),
+                              ).then((_) => _loadRecentScans());
+                            },
+                            child: Hero(
+                              tag: 'profile_avatar',
+                              child: Container(
+                                width: 50,
+                                height: 50,
+                                decoration: BoxDecoration(
+                                  color: AppColors.primaryBlue.withOpacity(0.1),
+                                  shape: BoxShape.circle,
+                                  border: Border.all(
+                                    color: AppColors.primaryBlue,
+                                    width: 2,
+                                  ),
+                                ),
+                                child: userPreferences.profilePicturePath.isNotEmpty
+                                    ? ClipRRect(
+                                        borderRadius: BorderRadius.circular(25),
+                                        child: Image.file(
+                                          File(userPreferences.profilePicturePath),
+                                          fit: BoxFit.cover,
+                                        ),
+                                      )
+                                    : Icon(
+                                        Icons.person,
+                                        color: AppColors.primaryBlue,
+                                        size: 26,
+                                      ),
                               ),
                             ),
+                          ),
                         ],
                       ),
-                      const SizedBox(height: AppDimensions.paddingM),
-                      
-                      // Recent scans list
-                      _recentScans.isEmpty
-                          ? _buildEmptyRecentScans()
-                          : AnimationLimiter(
-                              child: Column(
-                                children: List.generate(_recentScans.length, (index) {
-                                  return AnimationConfiguration.staggeredList(
-                                    position: index,
-                                    duration: const Duration(milliseconds: 375),
-                                    child: SlideAnimation(
-                                      verticalOffset: 50.0,
-                                      child: FadeInAnimation(
-                                        child: _buildRecentScanItem(_recentScans[index]),
-                                      ),
-                                    ),
-                                  );
-                                }),
-                              ),
-                            ),
                     ],
                   ),
                 ),
               ),
-            ],
-          ),
+            ),
+            
+            // Main content
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.all(AppDimensions.paddingL),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Quick access cards
+                    _buildQuickAccessGrid(),
+                    
+                    const SizedBox(height: AppDimensions.paddingL),
+                    
+                    // Recent scans section
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Text(
+                          AppStrings.recentScans,
+                          style: AppTextStyles.heading3,
+                        ),
+                        if (_recentScans.isNotEmpty)
+                          TextButton(
+                            onPressed: () {
+                              Navigator.push(
+                                context,
+                                _createPageRouteBuilder((context) => const HistoryScreen()),
+                              ).then((_) => _loadRecentScans());
+                            },
+                            child: Text(
+                              'View all',
+                              style: TextStyle(
+                                color: AppColors.primaryBlue,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
+                    const SizedBox(height: AppDimensions.paddingM),
+                    
+                    // Recent scans list
+                    _recentScans.isEmpty
+                        ? _buildEmptyRecentScans()
+                        : _skipInitialAnimations
+                            ? Column(
+                                children: _recentScans.map((scan) => _buildRecentScanItem(scan)).toList(),
+                              )
+                            : AnimationLimiter(
+                                child: Column(
+                                  children: List.generate(_recentScans.length, (index) {
+                                    return AnimationConfiguration.staggeredList(
+                                      position: index,
+                                      duration: const Duration(milliseconds: 600),
+                                      child: SlideAnimation(
+                                        verticalOffset: 50.0,
+                                        child: FadeInAnimation(
+                                          child: _buildRecentScanItem(_recentScans[index]),
+                                        ),
+                                      ),
+                                    );
+                                  }),
+                                ),
+                              ),
+                  ],
+                ),
+              ),
+            ),
+          ],
         ),
       ),
-      floatingActionButton: SizedBox(
-        height: 56,
-        width: 56,
-        child: FloatingActionButton(
-          onPressed: () {
-            Navigator.push(
-              context,
-              MaterialPageRoute(builder: (context) => const UploadScreen()),
-            ).then((_) => _loadRecentScans());
-          },
-          backgroundColor: AppColors.primaryBlue,
-          child: const Icon(Icons.add_a_photo, size: 22),
-          elevation: 4,
+      floatingActionButton: AnimatedBuilder(
+        animation: _pulseAnimation,
+        builder: (context, child) {
+          return Transform.scale(
+            scale: _pulseAnimation.value,
+            child: Container(
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                boxShadow: [
+                  BoxShadow(
+                    color: AppColors.primaryBlue.withOpacity(0.3),
+                    blurRadius: 10 * _pulseAnimation.value,
+                    spreadRadius: 2 * _pulseAnimation.value,
+                  ),
+                ],
+              ),
+              child: child,
+            ),
+          );
+        },
+        child: SizedBox(
+          height: 56,
+          width: 56,
+          child: FloatingActionButton(
+            onPressed: () {
+              Navigator.push(
+                context,
+                _createPageRouteBuilder((context) => const UploadScreen()),
+              ).then((_) => _loadRecentScans());
+            },
+            backgroundColor: AppColors.primaryBlue,
+            child: const Icon(Icons.add_a_photo, size: 22),
+            elevation: 4,
+          ),
         ),
       ),
       floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
@@ -331,7 +385,20 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
       case 1: // History
         Navigator.push(
           context,
-          MaterialPageRoute(builder: (context) => const HistoryScreen()),
+          PageRouteBuilder(
+            pageBuilder: (context, animation, secondaryAnimation) => const HistoryScreen(),
+            transitionsBuilder: (context, animation, secondaryAnimation, child) {
+              var begin = const Offset(1.0, 0.0);
+              var end = Offset.zero;
+              var curve = Curves.easeInOut;
+              var tween = Tween(begin: begin, end: end).chain(CurveTween(curve: curve));
+              return SlideTransition(
+                position: animation.drive(tween),
+                child: child,
+              );
+            },
+            transitionDuration: const Duration(milliseconds: 300),
+          ),
         ).then((_) {
           _loadRecentScans();
           setState(() => _currentIndex = 0);
@@ -340,7 +407,20 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
       case 2: // Settings
         Navigator.push(
           context,
-          MaterialPageRoute(builder: (context) => const SettingsScreen()),
+          PageRouteBuilder(
+            pageBuilder: (context, animation, secondaryAnimation) => const SettingsScreen(),
+            transitionsBuilder: (context, animation, secondaryAnimation, child) {
+              var begin = const Offset(1.0, 0.0);
+              var end = Offset.zero;
+              var curve = Curves.easeInOut;
+              var tween = Tween(begin: begin, end: end).chain(CurveTween(curve: curve));
+              return SlideTransition(
+                position: animation.drive(tween),
+                child: child,
+              );
+            },
+            transitionDuration: const Duration(milliseconds: 300),
+          ),
         ).then((_) {
           _loadRecentScans();
           setState(() => _currentIndex = 0);
@@ -349,8 +429,19 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
       case 3: // Profile
         Navigator.push(
           context,
-          MaterialPageRoute(
-            builder: (context) => const ProfileScreen(),
+          PageRouteBuilder(
+            pageBuilder: (context, animation, secondaryAnimation) => const ProfileScreen(),
+            transitionsBuilder: (context, animation, secondaryAnimation, child) {
+              var begin = const Offset(1.0, 0.0);
+              var end = Offset.zero;
+              var curve = Curves.easeInOut;
+              var tween = Tween(begin: begin, end: end).chain(CurveTween(curve: curve));
+              return SlideTransition(
+                position: animation.drive(tween),
+                child: child,
+              );
+            },
+            transitionDuration: const Duration(milliseconds: 300),
             settings: const RouteSettings(name: '/profile'),
           ),
         ).then((_) {
@@ -362,62 +453,189 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
   }
 
   Widget _buildQuickAccessGrid() {
-    return GridView.count(
-      crossAxisCount: 2,
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      mainAxisSpacing: 16,
-      crossAxisSpacing: 16,
-      children: [
-        _buildQuickAccessCard(
-          icon: Icons.document_scanner,
-          iconColor: AppColors.primaryBlue,
-          title: 'Scan Prescription',
-          description: 'Scan a new prescription',
-          onTap: () {
-            Navigator.push(
-              context,
-              MaterialPageRoute(builder: (context) => const UploadScreen()),
-            ).then((_) => _loadRecentScans());
-          },
-        ),
-        _buildQuickAccessCard(
-          icon: Icons.person,
-          iconColor: AppColors.warning,
-          title: 'Profile',
-          description: 'Your information',
-          onTap: () {
-            Navigator.push(
-              context,
-              MaterialPageRoute(builder: (context) => const ProfileScreen()),
-            ).then((_) => _loadRecentScans());
-          },
-        ),
-        _buildQuickAccessCard(
-          icon: Icons.history,
-          iconColor: AppColors.primaryPurple,
-          title: 'View History',
-          description: 'See all your scans',
-          onTap: () {
-            Navigator.push(
-              context,
-              MaterialPageRoute(builder: (context) => const HistoryScreen()),
-            ).then((_) => _loadRecentScans());
-          },
-        ),
-        _buildQuickAccessCard(
-          icon: Icons.settings,
-          iconColor: AppColors.success,
-          title: 'Settings',
-          description: 'App preferences',
-          onTap: () {
-            Navigator.push(
-              context,
-              MaterialPageRoute(builder: (context) => const SettingsScreen()),
-            ).then((_) => _loadRecentScans());
-          },
-        ),
-      ],
+    if (_skipInitialAnimations) {
+      // Without animations on first load
+      return GridView.count(
+        crossAxisCount: 2,
+        shrinkWrap: true,
+        physics: const NeverScrollableScrollPhysics(),
+        mainAxisSpacing: 16,
+        crossAxisSpacing: 16,
+        children: [
+          _buildQuickAccessCard(
+            icon: Icons.document_scanner,
+            iconColor: AppColors.primaryBlue,
+            title: 'Scan Prescription',
+            description: 'Scan a new prescription',
+            onTap: () {
+              Navigator.push(
+                context,
+                _createPageRouteBuilder((context) => const UploadScreen()),
+              ).then((_) => _loadRecentScans());
+            },
+          ),
+          _buildQuickAccessCard(
+            icon: Icons.person,
+            iconColor: AppColors.warning,
+            title: 'Profile',
+            description: 'Your information',
+            onTap: () {
+              Navigator.push(
+                context,
+                _createPageRouteBuilder((context) => const ProfileScreen()),
+              ).then((_) => _loadRecentScans());
+            },
+          ),
+          _buildQuickAccessCard(
+            icon: Icons.history,
+            iconColor: AppColors.primaryPurple,
+            title: 'View History',
+            description: 'See all your scans',
+            onTap: () {
+              Navigator.push(
+                context,
+                _createPageRouteBuilder((context) => const HistoryScreen()),
+              ).then((_) => _loadRecentScans());
+            },
+          ),
+          _buildQuickAccessCard(
+            icon: Icons.settings,
+            iconColor: AppColors.success,
+            title: 'Settings',
+            description: 'App preferences',
+            onTap: () {
+              Navigator.push(
+                context,
+                _createPageRouteBuilder((context) => const SettingsScreen()),
+              ).then((_) => _loadRecentScans());
+            },
+          ),
+        ],
+      );
+    }
+    
+    // With animations for subsequent interactions
+    return AnimationLimiter(
+      child: GridView.count(
+        crossAxisCount: 2,
+        shrinkWrap: true,
+        physics: const NeverScrollableScrollPhysics(),
+        mainAxisSpacing: 16,
+        crossAxisSpacing: 16,
+        children: List.generate(4, (index) {
+          Widget card;
+          VoidCallback onTap;
+          Widget Function(BuildContext) builder;
+          
+          switch(index) {
+            case 0:
+              builder = (context) => const UploadScreen();
+              onTap = () {
+                Navigator.push(
+                  context,
+                  _createPageRouteBuilder(builder),
+                ).then((_) => _loadRecentScans());
+              };
+              card = _buildQuickAccessCard(
+                icon: Icons.document_scanner,
+                iconColor: AppColors.primaryBlue,
+                title: 'Scan Prescription',
+                description: 'Scan a new prescription',
+                onTap: onTap,
+              );
+              break;
+            case 1:
+              builder = (context) => const ProfileScreen();
+              onTap = () {
+                Navigator.push(
+                  context,
+                  _createPageRouteBuilder(builder),
+                ).then((_) => _loadRecentScans());
+              };
+              card = _buildQuickAccessCard(
+                icon: Icons.person,
+                iconColor: AppColors.warning,
+                title: 'Profile',
+                description: 'Your information',
+                onTap: onTap,
+              );
+              break;
+            case 2:
+              builder = (context) => const HistoryScreen();
+              onTap = () {
+                Navigator.push(
+                  context,
+                  _createPageRouteBuilder(builder),
+                ).then((_) => _loadRecentScans());
+              };
+              card = _buildQuickAccessCard(
+                icon: Icons.history,
+                iconColor: AppColors.primaryPurple,
+                title: 'View History',
+                description: 'See all your scans',
+                onTap: onTap,
+              );
+              break;
+            case 3:
+              builder = (context) => const SettingsScreen();
+              onTap = () {
+                Navigator.push(
+                  context,
+                  _createPageRouteBuilder(builder),
+                ).then((_) => _loadRecentScans());
+              };
+              card = _buildQuickAccessCard(
+                icon: Icons.settings,
+                iconColor: AppColors.success,
+                title: 'Settings',
+                description: 'App preferences',
+                onTap: onTap,
+              );
+              break;
+            default:
+              card = const SizedBox();
+              onTap = () {};
+              builder = (context) => const SizedBox();
+          }
+          
+          return AnimationConfiguration.staggeredGrid(
+            position: index,
+            duration: const Duration(milliseconds: 500),
+            columnCount: 2,
+            child: ScaleAnimation(
+              scale: 0.9,
+              child: FadeInAnimation(
+                child: card,
+              ),
+            ),
+          );
+        }),
+      ),
+    );
+  }
+
+  PageRouteBuilder _createPageRouteBuilder(Widget Function(BuildContext) builder) {
+    return PageRouteBuilder(
+      pageBuilder: (context, animation, secondaryAnimation) => builder(context),
+      transitionsBuilder: (context, animation, secondaryAnimation, child) {
+        var begin = const Offset(1.0, 0.0);
+        var end = Offset.zero;
+        var curve = Curves.easeInOut;
+        var tween = Tween(begin: begin, end: end).chain(CurveTween(curve: curve));
+        
+        var fadeAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
+          CurvedAnimation(parent: animation, curve: Curves.easeIn)
+        );
+        
+        return FadeTransition(
+          opacity: fadeAnimation,
+          child: SlideTransition(
+            position: animation.drive(tween),
+            child: child,
+          ),
+        );
+      },
+      transitionDuration: const Duration(milliseconds: 300),
     );
   }
 
@@ -428,280 +646,511 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
     required String description,
     required VoidCallback onTap,
   }) {
-    return Card(
-      elevation: 2,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(16),
-      ),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(16),
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: iconColor.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Icon(
-                  icon,
-                  color: iconColor,
-                  size: 24,
-                ),
-              ),
-              Spacer(flex: 1),
-              Text(
-                title,
-                style: const TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                ),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
-              const SizedBox(height: 4),
-              Text(
-                description,
-                style: TextStyle(
-                  fontSize: 12,
-                  color: AppColors.textSecondary,
-                ),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildEmptyRecentScans() {
-    return Container(
-      padding: const EdgeInsets.all(AppDimensions.paddingL),
-      decoration: BoxDecoration(
-        color: AppColors.cardBackground,
-        borderRadius: BorderRadius.circular(AppDimensions.radiusL),
-        border: Border.all(
-          color: AppColors.divider,
-          width: 1,
-        ),
-      ),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: AppColors.primaryBlue.withOpacity(0.1),
-              shape: BoxShape.circle,
-            ),
-            child: const Icon(
-              Icons.description_outlined,
-              size: 32,
-              color: AppColors.primaryBlue,
-            ),
-          ),
-          const SizedBox(height: AppDimensions.paddingM),
-          Text(
-            AppStrings.noRecentScans,
-            style: AppTextStyles.subtitle.copyWith(
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            'Scan your first prescription',
-            style: TextStyle(
-              color: AppColors.textSecondary,
-              fontSize: 14,
-            ),
-          ),
-          const SizedBox(height: AppDimensions.paddingL),
-          ElevatedButton.icon(
-            onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (context) => const UploadScreen()),
-              ).then((_) => _loadRecentScans());
+    return TweenAnimationBuilder<double>(
+      tween: Tween<double>(begin: 1.0, end: 1.0),
+      duration: const Duration(milliseconds: 200),
+      builder: (context, scale, child) {
+        return Transform.scale(
+          scale: scale,
+          child: child,
+        );
+      },
+      child: Builder(
+        builder: (context) {
+          return GestureDetector(
+            onTapDown: (_) {
+              // When the card is pressed, update the tween
+              final TweenAnimationBuilder<double> tweenAnimation = 
+                  context.findAncestorWidgetOfExactType<TweenAnimationBuilder<double>>()!;
+              tweenAnimation.tween.begin = 0.95;
+              tweenAnimation.tween.end = 0.95;
             },
-            icon: const Icon(Icons.add_a_photo, size: 16),
-            label: const Text('Scan Now'),
-            style: ElevatedButton.styleFrom(
-              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+            onTapUp: (_) {
+              // When the card is released, update the tween
+              final TweenAnimationBuilder<double> tweenAnimation = 
+                  context.findAncestorWidgetOfExactType<TweenAnimationBuilder<double>>()!;
+              tweenAnimation.tween.begin = 0.95;
+              tweenAnimation.tween.end = 1.0;
+            },
+            onTapCancel: () {
+              // When tap is canceled, reset the scale
+              final TweenAnimationBuilder<double> tweenAnimation = 
+                  context.findAncestorWidgetOfExactType<TweenAnimationBuilder<double>>()!;
+              tweenAnimation.tween.begin = 0.95;
+              tweenAnimation.tween.end = 1.0;
+            },
+            onTap: onTap,
+            child: Card(
+              elevation: 3,
+              shadowColor: iconColor.withOpacity(0.3),
               shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
+                borderRadius: BorderRadius.circular(16),
               ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildRecentScanItem(PrescriptionModel scan) {
-    return Card(
-      margin: const EdgeInsets.only(bottom: AppDimensions.paddingM),
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(AppDimensions.radiusL),
-      ),
-      elevation: 2,
-      child: InkWell(
-        onTap: () {
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (context) => ResultScreen(prescription: scan),
-            ),
-          ).then((_) => _loadRecentScans());
-        },
-        borderRadius: BorderRadius.circular(AppDimensions.radiusL),
-        child: Padding(
-          padding: const EdgeInsets.all(AppDimensions.paddingM),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              // Image preview with gradient overlay
-              Container(
-                width: 80,
-                height: 80,
+              child: Container(
                 decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(AppDimensions.radiusM),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withOpacity(0.1),
-                      spreadRadius: 1,
-                      blurRadius: 3,
-                    ),
-                  ],
-                ),
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(AppDimensions.radiusM),
-                  child: Stack(
-                    fit: StackFit.expand,
-                    children: [
-                      _buildImagePreview(scan),
-                      // Gradient overlay
-                      Container(
-                        decoration: BoxDecoration(
-                          gradient: LinearGradient(
-                            begin: Alignment.topCenter,
-                            end: Alignment.bottomCenter,
-                            colors: [
-                              Colors.transparent,
-                              Colors.black.withOpacity(0.6),
-                            ],
-                            stops: const [0.7, 1.0],
-                          ),
-                        ),
-                      ),
-                      // Important icon if marked
-                      if (scan.isImportant)
-                        Positioned(
-                          top: 4,
-                          right: 4,
-                          child: Container(
-                            padding: const EdgeInsets.all(4),
-                            decoration: BoxDecoration(
-                              color: Colors.black.withOpacity(0.5),
-                              borderRadius: BorderRadius.circular(4),
-                            ),
-                            child: const Icon(
-                              Icons.star,
-                              color: AppColors.warning,
-                              size: 14,
-                            ),
-                          ),
-                        ),
+                  borderRadius: BorderRadius.circular(16),
+                  gradient: LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [
+                      Colors.white,
+                      iconColor.withOpacity(0.1),
                     ],
                   ),
                 ),
-              ),
-              
-              const SizedBox(width: AppDimensions.paddingM),
-              
-              // Scan info
-              Expanded(
+                padding: const EdgeInsets.all(16),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // Date
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: iconColor.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(12),
+                        boxShadow: [
+                          BoxShadow(
+                            color: iconColor.withOpacity(0.1),
+                            blurRadius: 8,
+                            offset: const Offset(0, 2),
+                          ),
+                        ],
+                      ),
+                      child: Icon(
+                        icon,
+                        color: iconColor,
+                        size: 24,
+                      ),
+                    ),
+                    const Spacer(flex: 1),
                     Text(
-                      _formatDate(scan.dateScanned),
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: AppColors.textLight,
-                        fontWeight: FontWeight.w500,
+                      title,
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
                       ),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
                     const SizedBox(height: 4),
-                    
-                    // Summary preview
                     Text(
-                      _getSummaryPreview(scan.summary),
-                      style: const TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w500,
+                      description,
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: AppColors.textSecondary,
                       ),
-                      maxLines: 2,
+                      maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
-                    const SizedBox(height: 8),
-                    
-                    // Medicine count badge
-                    if (scan.medicines.isNotEmpty)
-                      Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(
-                            Icons.medication_outlined,
-                            size: 14,
-                            color: AppColors.primaryBlue,
-                          ),
-                          const SizedBox(width: 4),
-                          Flexible(
-                            child: Text(
-                              '${scan.medicines.length} ${scan.medicines.length == 1 ? 'medicine' : 'medicines'}',
-                              style: TextStyle(
-                                fontSize: 12,
-                                color: AppColors.primaryBlue,
-                                fontWeight: FontWeight.w500,
-                              ),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
-                        ],
-                      ),
                   ],
                 ),
               ),
-              
-              // Arrow icon
-              Padding(
-                padding: const EdgeInsets.only(left: 4),
-                child: Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    color: AppColors.primaryBlue.withOpacity(0.1),
-                    shape: BoxShape.circle,
-                  ),
-                  child: const Icon(
-                    Icons.arrow_forward_ios,
-                    color: AppColors.primaryBlue,
-                    size: 14,
+            ),
+          );
+        }
+      ),
+    );
+  }
+
+  Widget _buildEmptyRecentScans() {
+    if (_skipInitialAnimations) {
+      // Without animations on first load
+      return Container(
+        padding: const EdgeInsets.all(AppDimensions.paddingL),
+        decoration: BoxDecoration(
+          color: AppColors.cardBackground,
+          borderRadius: BorderRadius.circular(AppDimensions.radiusL),
+          border: Border.all(
+            color: AppColors.divider,
+            width: 1,
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.05),
+              blurRadius: 10,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: AppColors.primaryBlue.withOpacity(0.1),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(
+                Icons.description_outlined,
+                size: 32,
+                color: AppColors.primaryBlue,
+              ),
+            ),
+            const SizedBox(height: AppDimensions.paddingM),
+            Text(
+              AppStrings.noRecentScans,
+              style: AppTextStyles.subtitle.copyWith(
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Scan your first prescription',
+              style: TextStyle(
+                color: AppColors.textSecondary,
+                fontSize: 14,
+              ),
+            ),
+            const SizedBox(height: AppDimensions.paddingL),
+            ElevatedButton.icon(
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  _createPageRouteBuilder((context) => const UploadScreen()),
+                ).then((_) => _loadRecentScans());
+              },
+              icon: const Icon(Icons.add_a_photo, size: 16),
+              label: const Text('Scan Now'),
+              style: ElevatedButton.styleFrom(
+                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                elevation: 3,
+                shadowColor: AppColors.primaryBlue.withOpacity(0.3),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+    
+    // With animations for subsequent interactions
+    return AnimationConfiguration.synchronized(
+      duration: const Duration(milliseconds: 800),
+      child: SlideAnimation(
+        verticalOffset: 50.0,
+        child: FadeInAnimation(
+          child: Container(
+            padding: const EdgeInsets.all(AppDimensions.paddingL),
+            decoration: BoxDecoration(
+              color: AppColors.cardBackground,
+              borderRadius: BorderRadius.circular(AppDimensions.radiusL),
+              border: Border.all(
+                color: AppColors.divider,
+                width: 1,
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.05),
+                  blurRadius: 10,
+                  offset: const Offset(0, 2),
+                ),
+              ],
+            ),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                TweenAnimationBuilder<double>(
+                  tween: Tween<double>(begin: 0, end: 1),
+                  duration: const Duration(milliseconds: 1000),
+                  curve: Curves.elasticOut,
+                  builder: (context, value, child) {
+                    return Transform.scale(
+                      scale: value,
+                      child: Container(
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: AppColors.primaryBlue.withOpacity(0.1),
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(
+                          Icons.description_outlined,
+                          size: 32,
+                          color: AppColors.primaryBlue,
+                        ),
+                      ),
+                    );
+                  },
+                ),
+                const SizedBox(height: AppDimensions.paddingM),
+                Text(
+                  AppStrings.noRecentScans,
+                  style: AppTextStyles.subtitle.copyWith(
+                    fontWeight: FontWeight.bold,
                   ),
                 ),
-              ),
-            ],
+                const SizedBox(height: 8),
+                Text(
+                  'Scan your first prescription',
+                  style: TextStyle(
+                    color: AppColors.textSecondary,
+                    fontSize: 14,
+                  ),
+                ),
+                const SizedBox(height: AppDimensions.paddingL),
+                ElevatedButton.icon(
+                  onPressed: () {
+                    Navigator.push(
+                      context,
+                      _createPageRouteBuilder((context) => const UploadScreen()),
+                    ).then((_) => _loadRecentScans());
+                  },
+                  icon: const Icon(Icons.add_a_photo, size: 16),
+                  label: const Text('Scan Now'),
+                  style: ElevatedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    elevation: 3,
+                    shadowColor: AppColors.primaryBlue.withOpacity(0.3),
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _buildRecentScanItem(PrescriptionModel scan) {
+    return TweenAnimationBuilder<double>(
+      tween: Tween<double>(begin: 1.0, end: 1.0),
+      duration: const Duration(milliseconds: 200),
+      builder: (context, scale, child) {
+        return Transform.scale(
+          scale: scale,
+          child: child,
+        );
+      },
+      child: Builder(
+        builder: (context) {
+          return GestureDetector(
+            onTapDown: (_) {
+              final TweenAnimationBuilder<double> tweenAnimation = 
+                  context.findAncestorWidgetOfExactType<TweenAnimationBuilder<double>>()!;
+              tweenAnimation.tween.begin = 0.98;
+              tweenAnimation.tween.end = 0.98;
+            },
+            onTapUp: (_) {
+              final TweenAnimationBuilder<double> tweenAnimation = 
+                  context.findAncestorWidgetOfExactType<TweenAnimationBuilder<double>>()!;
+              tweenAnimation.tween.begin = 0.98;
+              tweenAnimation.tween.end = 1.0;
+            },
+            onTapCancel: () {
+              final TweenAnimationBuilder<double> tweenAnimation = 
+                  context.findAncestorWidgetOfExactType<TweenAnimationBuilder<double>>()!;
+              tweenAnimation.tween.begin = 0.98;
+              tweenAnimation.tween.end = 1.0;
+            },
+            onTap: () {
+              Navigator.push(
+                context,
+                PageRouteBuilder(
+                  pageBuilder: (context, animation, secondaryAnimation) => 
+                    ResultScreen(prescription: scan),
+                  transitionsBuilder: (context, animation, secondaryAnimation, child) {
+                    // Create hero animation for prescription image
+                    return FadeTransition(
+                      opacity: animation,
+                      child: child,
+                    );
+                  },
+                  transitionDuration: const Duration(milliseconds: 300),
+                ),
+              ).then((_) => _loadRecentScans());
+            },
+            child: Card(
+              margin: const EdgeInsets.only(bottom: AppDimensions.paddingM),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(AppDimensions.radiusL),
+              ),
+              elevation: 3,
+              shadowColor: AppColors.primaryBlue.withOpacity(0.2),
+              child: Container(
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(AppDimensions.radiusL),
+                  gradient: LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [
+                      Colors.white,
+                      scan.isImportant 
+                          ? AppColors.warning.withOpacity(0.05)
+                          : AppColors.primaryBlue.withOpacity(0.05),
+                    ],
+                  ),
+                ),
+                padding: const EdgeInsets.all(AppDimensions.paddingM),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    // Image preview with gradient overlay
+                    Hero(
+                      tag: 'prescription_image_${scan.id}',
+                      child: Container(
+                        width: 80,
+                        height: 80,
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(AppDimensions.radiusM),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withOpacity(0.1),
+                              spreadRadius: 1,
+                              blurRadius: 3,
+                            ),
+                          ],
+                        ),
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(AppDimensions.radiusM),
+                          child: Stack(
+                            fit: StackFit.expand,
+                            children: [
+                              _buildImagePreview(scan),
+                              // Gradient overlay
+                              Container(
+                                decoration: BoxDecoration(
+                                  gradient: LinearGradient(
+                                    begin: Alignment.topCenter,
+                                    end: Alignment.bottomCenter,
+                                    colors: [
+                                      Colors.transparent,
+                                      Colors.black.withOpacity(0.6),
+                                    ],
+                                    stops: const [0.7, 1.0],
+                                  ),
+                                ),
+                              ),
+                              // Important icon if marked
+                              if (scan.isImportant)
+                                Positioned(
+                                  top: 4,
+                                  right: 4,
+                                  child: Container(
+                                    padding: const EdgeInsets.all(4),
+                                    decoration: BoxDecoration(
+                                      color: Colors.black.withOpacity(0.5),
+                                      borderRadius: BorderRadius.circular(4),
+                                    ),
+                                    child: const Icon(
+                                      Icons.star,
+                                      color: AppColors.warning,
+                                      size: 14,
+                                    ),
+                                  ),
+                                ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                    
+                    const SizedBox(width: AppDimensions.paddingM),
+                    
+                    // Scan info
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          // Date
+                          Row(
+                            children: [
+                              Icon(
+                                Icons.calendar_today,
+                                size: 12,
+                                color: AppColors.textLight,
+                              ),
+                              const SizedBox(width: 4),
+                              Text(
+                                _formatDate(scan.dateScanned),
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: AppColors.textLight,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 6),
+                          
+                          // Summary preview
+                          Text(
+                            _getSummaryPreview(scan.summary),
+                            style: const TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w500,
+                            ),
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          const SizedBox(height: 8),
+                          
+                          // Medicine count badge
+                          if (scan.medicines.isNotEmpty)
+                            Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                  decoration: BoxDecoration(
+                                    color: AppColors.primaryBlue.withOpacity(0.1),
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Icon(
+                                        Icons.medication_outlined,
+                                        size: 12,
+                                        color: AppColors.primaryBlue,
+                                      ),
+                                      const SizedBox(width: 4),
+                                      Text(
+                                        '${scan.medicines.length} ${scan.medicines.length == 1 ? 'medicine' : 'medicines'}',
+                                        style: TextStyle(
+                                          fontSize: 11,
+                                          color: AppColors.primaryBlue,
+                                          fontWeight: FontWeight.w500,
+                                        ),
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ),
+                        ],
+                      ),
+                    ),
+                    
+                    // Arrow icon
+                    Padding(
+                      padding: const EdgeInsets.only(left: 4),
+                      child: Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: AppColors.primaryBlue.withOpacity(0.1),
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(
+                          Icons.arrow_forward_ios,
+                          color: AppColors.primaryBlue,
+                          size: 14,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          );
+        }
       ),
     );
   }
